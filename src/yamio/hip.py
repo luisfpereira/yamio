@@ -1,4 +1,16 @@
-'''Reads Cerfacs' XDMF files by wrapping meshio'''
+'''Reads Cerfacs' XDMF files by wrapping meshio.
+
+Notes:
+    For now it ignores:
+        * patches
+        * any data
+        * mixed elements
+    Validated elements:
+        * Triangle
+        * Quadrilateral
+        * Tetrahedron
+        * Hexahedron
+'''
 
 
 from xml.etree import ElementTree as ET
@@ -70,7 +82,6 @@ class HipReader(XdmfReader):
         with h5py.File(self.h5_filename, 'r') as h5_file:
             boundary = Boundary.read_from_h5(h5_file)
 
-        # TODO: retrieve hip mesh
         return HipMesh(points, cells, boundary)
 
 
@@ -159,7 +170,7 @@ class Boundary:
     @classmethod
     def read_from_h5(cls, h5_file):
         nodes = cls._read_dataset(h5_file, cls.label_nodes) - 1
-        group_dims = cls._read_dataset(h5_file, cls.label_groups)
+        group_dims = cls._read_dataset(h5_file, cls.label_groups) - 1
 
         return Boundary(nodes, group_dims)
 
@@ -169,4 +180,4 @@ class Boundary:
 
     def write_to_h5(self, h5_file):
         create_h5_dataset(h5_file, self.label_nodes, self.nodes + 1)
-        create_h5_dataset(h5_file, self.label_groups, self.group_dims)
+        create_h5_dataset(h5_file, self.label_groups, self.group_dims + 1)
