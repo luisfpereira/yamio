@@ -1,10 +1,11 @@
-'''Reads Cerfacs' XDMF files by wrapping meshio.
+'''Reads and writes Cerfacs' XDMF files by wrapping meshio.
 
 Notes:
     For now it ignores:
         * patches
         * any data
         * mixed elements
+
     Validated elements:
         * Triangle
         * Quadrilateral
@@ -87,9 +88,9 @@ class HipReader(XdmfReader):
 
 class HipWriter:
 
-    def __init__(self, version='2.0', fmt='HDF'):
-        self.version = version
-        self.fmt = fmt
+    def __init__(self):
+        self.version = '2.0'
+        self.fmt = 'HDF'
 
     def write(self, file_basename, mesh):
         root = create_root(version=self.version, Format=self.fmt)
