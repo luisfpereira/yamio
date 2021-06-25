@@ -4,18 +4,24 @@ Notes:
     Still a very naive implementation of a writer and a reader.
 
     Supports:
+        * Unique part reading/writing (may contain mixed elements).
 
     Validated elements:
+        * tri
         * quad
 
 
 
 References:
     [1] [EnSight User Manual](https://dav.lbl.gov/archive/NERSC/Software/ensight/doc/Manuals/UserManual.pdf)
-
 '''
 
+import re
+
 import numpy as np
+
+from meshio import Mesh
+from meshio import CellBlock
 
 
 meshio_to_geo_type = {'vertex': 'point',
@@ -30,14 +36,45 @@ meshio_to_geo_type = {'vertex': 'point',
                       'hexahedron20': 'hexa20',
                       'pyramid': 'pyramid5',
                       'pyramid13': 'pyramid13'}
+geo_to_meshio_type = {item: key for key, item in meshio_to_geo_type.items()}
 
 
-# TODO: add simple reader?
+class GeoReader:
+
+    def read(self, filename):
+
+        with open(filename, 'r') as file:
+            text = file.read()
+
+        points = self._get_coords(text)
+        cells = self._get_cells(text)
+
+        return Mesh(points, cells)
+
+    def _get_coords(self, text):
+        regex = re.compile('part[ ]*\n(?:.+\n){,4}([^a-zA-Z]+)+')
+        mo = regex.search(text)
+
+        return np.array(mo.group(1).split('\n')[:-1], dtype=float).reshape(3, -1).T
+
+    def _get_cells(self, text):
+        regex = re.compile(r'\w+[ ]*\n\d+[ ]*\n(?:[0-9 ]{3,}\n*)+')
+
+        cells = []
+        for info in regex.findall(text):
+            ls = info.split('\n')
+            elem_type = ls[0].strip()
+            conns = np.array([elem.split() for elem in ls[2:]], dtype=int)
+
+            cells.append(CellBlock(geo_to_meshio_type[elem_type], conns - 1))
+
+        return cells
+
 
 class GeoWriter:
 
     def write(self, filename, mesh, description=None, node_id='off',
-              element_id='off'):
+              element_id='off', part_description=''):
         '''
         Args:
             description (array-like, shape=[2]): two initial lines of the file.
@@ -52,7 +89,7 @@ class GeoWriter:
         text.append(f'node_id {element_id}')
 
         # part
-        text.extend(self._add_part(1, '', mesh.points, mesh.cells))
+        text.extend(self._add_part(1, part_description, mesh.points, mesh.cells))
 
         # write file
         with open(filename, 'w') as file:
@@ -68,7 +105,7 @@ class GeoWriter:
             * Print order: all x-> all y -> all z.
 
         '''
-        text = ['part', number]
+        text = ['part', number, description]
         text.extend(self._write_part_coords(coords))
 
         for cell in cells:
