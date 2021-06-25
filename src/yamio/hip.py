@@ -19,8 +19,8 @@ from xml.etree import ElementTree as ET
 import numpy as np
 import h5py
 
-from meshio._mesh import CellBlock
-from meshio._mesh import Mesh
+from meshio import CellBlock
+from meshio import Mesh
 from meshio.xdmf.main import XdmfReader
 from meshio.xdmf.common import xdmf_to_meshio_type
 from meshio.xdmf.common import meshio_to_xdmf_type
@@ -34,16 +34,17 @@ from yamio.xdmf2_utils import create_h5_dataset
 class HipReader(XdmfReader):
     # TODO: add support for patches
 
-    def __init__(self, filename, h5_filename=None):
-        self.filename = filename
-        self.h5_filename = h5_filename
-        if h5_filename is None:
-            self.h5_filename = f"{'.'.join(filename.split('.')[:-1])}.h5"
+    def __init__(self):
+        pass
+        # self.filename = filename
+        # self.h5_filename = h5_filename
+        # if h5_filename is None:
+        #     self.h5_filename = f"{'.'.join(filename.split('.')[:-1])}.h5"
 
-    def _get_etree(self):
+    def _get_etree(self, filename):
 
         parser = ET.XMLParser()
-        tree = ET.parse(self.filename, parser)
+        tree = ET.parse(filename, parser)
 
         return tree
 
@@ -67,12 +68,16 @@ class HipReader(XdmfReader):
     def _get_geometry(self, geometry_elem):
         return np.array([self._read_data_item(data_item) for data_item in list(geometry_elem)]).T
 
-    def read(self):
+    def read(self, filename, h5_filename=None):
         '''
         Notes:
             Assumes first grid is the mesh and ignores patches.
         '''
-        tree = self._get_etree()
+        self.filename = filename  # bad code, but forced by inheritance
+        if h5_filename is None:
+            h5_filename = f"{'.'.join(filename.split('.')[:-1])}.h5"
+
+        tree = self._get_etree(filename)
 
         topology_elem = tree.find('.//Topology')
         cells = self._get_topology(topology_elem)
@@ -80,7 +85,7 @@ class HipReader(XdmfReader):
         geometry_elem = tree.find('.//Geometry')
         points = self._get_geometry(geometry_elem)
 
-        with h5py.File(self.h5_filename, 'r') as h5_file:
+        with h5py.File(h5_filename, 'r') as h5_file:
             boundary = Boundary.read_from_h5(h5_file)
 
         return HipMesh(points, cells, boundary)
