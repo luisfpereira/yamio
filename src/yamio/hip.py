@@ -145,6 +145,8 @@ class HipWriter:
             # write boundary data (only in h5 file)
             if write_bnd:
                 mesh.boundary.write_to_h5(h5_file)
+            else:
+                h5_file.create_group('Boundary')
 
         # dump tree
         tree = ET.ElementTree(root)
