@@ -128,7 +128,7 @@ class HipWriter:
         self.version = '2.0'
         self.fmt = 'HDF'
 
-    def write(self, file_basename, mesh):
+    def write(self, file_basename, mesh, write_bnd=False):
         root = create_root(version=self.version, Format=self.fmt)
         domain = ET.SubElement(root, "Domain")
         # TODO: need more parameters here?
@@ -143,7 +143,8 @@ class HipWriter:
             self._write_geometry(h5_file, mesh, grid)
 
             # write boundary data (only in h5 file)
-            mesh.boundary.write_to_h5(h5_file)
+            if write_bnd:
+                mesh.boundary.write_to_h5(h5_file)
 
         # dump tree
         tree = ET.ElementTree(root)
