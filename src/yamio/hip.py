@@ -30,10 +30,12 @@ from yamio.xdmf2_utils import create_root
 from yamio.xdmf2_utils import create_topology_section
 from yamio.xdmf2_utils import create_geometry_section
 from yamio.xdmf2_utils import create_h5_dataset
+from yamio.mesh_utils import get_local_points_and_cells
 
 
 class HipReader(XdmfReader):
     # TODO: add support for patches
+    # TODO: really need dependency in XDMFReader?
 
     def __init__(self):
         pass
@@ -115,8 +117,11 @@ class HipReader(XdmfReader):
         points = self._get_geometry(geometry_elem)
 
         patches = self._get_patches(tree)
+        # TODO: patches and boundary nodes are closely related -> abstract!
+        # TODO: patch is boundary?
 
         with h5py.File(h5_filename, 'r') as h5_file:
+            # TODO: treat boundary as everything else?
             boundary = Boundary.read_from_h5(h5_file)
 
         return HipMesh(points, cells, boundary, patches=patches)
@@ -187,6 +192,7 @@ correct_cell_conns_writing = {'tetra': _correct_tetra_conns_writing}
 
 
 class HipMesh(Mesh):
+    # TODO: can meshio.Mesh point_sets be used instead of creating a new object?
 
     def __init__(self, points, cells, boundary, patches=None, point_data=None,
                  cell_data=None, field_data=None, point_sets=None, cell_sets=None,
@@ -195,6 +201,7 @@ class HipMesh(Mesh):
         Notes:
             Patches follow cells format.
         """
+        # TODO: patches as dict in order to keep names
         super().__init__(points, cells, point_data=point_data,
                          cell_data=cell_data, field_data=field_data,
                          point_sets=point_sets, cell_sets=cell_sets,
@@ -204,6 +211,7 @@ class HipMesh(Mesh):
 
 
 class Boundary:
+    # TODO: rethink boundary representation and connection to patches
     # for h5
     label_nodes = 'Boundary/bnode->node'
     label_groups = 'Boundary/bnode_lidx'
@@ -213,14 +221,14 @@ class Boundary:
         self.nodes = nodes
         self.group_dims = group_dims
 
-    @ classmethod
+    @classmethod
     def read_from_h5(cls, h5_file):
         nodes = cls._read_dataset(h5_file, cls.label_nodes) - 1
         group_dims = cls._read_dataset(h5_file, cls.label_groups) - 1
 
         return Boundary(nodes, group_dims)
 
-    @ staticmethod
+    @staticmethod
     def _read_dataset(h5_file, label):
         return h5_file[label][()]
 
@@ -230,26 +238,8 @@ class Boundary:
 
 
 def create_mesh_from_patches(mesh, ravel_cells=True):
-    cells = mesh.patches
 
-    all_req_dofs = []
-    for cell in cells:
-        all_req_dofs.extend(cell.data.ravel().tolist())
-    all_req_dofs = set(all_req_dofs)
-
-    dof_map = {dof: new_dof for new_dof, dof in enumerate(all_req_dofs)}
-
-    new_cells = []
-    for cell in cells:
-        shape = cell.data.shape
-        data = np.empty_like(cell.data)
-        for i in range(shape[0]):
-            for j in range(shape[1]):
-                data[i, j] = dof_map[cell.data[i, j]]
-
-        new_cells.append(CellBlock(cell.type, data))
-
-    new_points = mesh.points[list(all_req_dofs), :]
+    new_points, new_cells = get_local_points_and_cells(mesh.points, mesh.patches)
 
     if ravel_cells:
         # this is required only due to way geo reading is done in tiny-3d-engine
