@@ -39,6 +39,9 @@ meshio_to_geo_type = {'vertex': 'point',
 geo_to_meshio_type = {item: key for key, item in meshio_to_geo_type.items()}
 
 
+# TODO: add test to verify if passed mesh is not modified
+
+
 class GeoReader:
 
     def read(self, filename):
@@ -127,9 +130,9 @@ class GeoWriter:
 
     def _write_part_conns(self, elem_type, conns):
         n_elems = conns.shape[0]
-        conns += 1
+        new_conns = conns + 1
         text = [elem_type, n_elems]
-        text.extend(conns.tolist())
+        text.extend(new_conns.tolist())
 
         return text
 

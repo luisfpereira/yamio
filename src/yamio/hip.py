@@ -1,4 +1,4 @@
-'''Reads and writes Cerfacs' XDMF files by wrapping meshio.
+"""Reads and writes Cerfacs' XDMF files by wrapping meshio.
 
 Notes:
     For now it ignores:
@@ -11,7 +11,10 @@ Notes:
         * Quadrilateral
         * Tetrahedron
         * Hexahedron
-'''
+"""
+
+# TODO: validation should be done with tests!
+# TODO: add test to verify if passed mesh is not modified
 
 
 from xml.etree import ElementTree as ET
@@ -31,6 +34,9 @@ from yamio.xdmf2_utils import create_topology_section
 from yamio.xdmf2_utils import create_geometry_section
 from yamio.xdmf2_utils import create_h5_dataset
 from yamio.mesh_utils import get_local_points_and_cells
+
+
+# TODO: deep changes in design (probably no need of a HipMesh -> explore meshio)
 
 
 class HipReader(XdmfReader):
@@ -164,7 +170,7 @@ class HipWriter:
     def _write_topology(self, file, mesh, grid_elem):
         # ignores mixed case
         topology_type = mesh.cells[0].type
-        data = mesh.cells[0].data
+        data = mesh.cells[0].data.copy()
         data = correct_cell_conns_writing.get(topology_type, lambda x: x)(data)
         data += 1
         return create_topology_section(grid_elem, data, file,
@@ -177,13 +183,15 @@ class HipWriter:
 
 
 def _correct_tetra_conns_reading(cells):
-    cells[:, [1, 2]] = cells[:, [2, 1]]
-    return cells
+    new_cells = cells.copy()
+    new_cells[:, [1, 2]] = new_cells[:, [2, 1]]
+    return new_cells
 
 
 def _correct_tetra_conns_writing(cells):
-    cells[:, [2, 1]] = cells[:, [1, 2]]
-    return cells
+    new_cells = cells.copy()
+    new_cells[:, [2, 1]] = new_cells[:, [1, 2]]
+    return new_cells
 
 
 # uses meshio names
