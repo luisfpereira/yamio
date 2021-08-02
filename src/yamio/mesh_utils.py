@@ -2,21 +2,33 @@ import numpy as np
 
 import meshio
 
-# TODO: need to verify wrong viz in paraview from converting elements
+# TODO: from cell to cell_block (for readability)
 
 
-def get_faces_from_conns(conns):
-    map_to_elem = {8: from_hexa_to_quad}
-    return map_to_elem[conns.shape[1]](conns)
+def get_brep(points, cells):
+    """Get boundary representation (brep).
+
+    Notes:
+        Boundary representations are edges (2d) or faces (3d).
+
+        New connectivity numbers will be used (after removal of non-used points).
+    """
+    map_to_elem = {'quad': from_quad_to_line,
+                   'hexahedron': from_hexa_to_quad}
+
+    # name face is for simplification (represents edge if 2d)
+    brep_cells = []
+    for cell in cells:
+        elem_type, faces = map_to_elem[cell.type](cell.data, keep_repeated=True)
+        bnd_faces = np.array([face for face in faces if not is_repeated_conn(faces, face)])
+        brep_cells.append(meshio.CellBlock(elem_type, bnd_faces))
+
+    points, cells = get_local_points_and_cells(points, brep_cells)
+
+    return points, cells
 
 
-def get_bnd_faces_from_conns(conns):
-    elem_type, faces = get_faces_from_conns(conns)
-    return elem_type, get_bnd_faces_from_faces(faces)
-
-
-def from_hexa_to_quad(conns):
-    # TODO: avoid repetitions (flag).
+def from_hexa_to_quad(conns, keep_repeated=True):
     bottom_face = conns[:, :4]
     top_face = conns[:, 4:]
     front_face = conns[:, [1, 2, 6, 5]]
@@ -24,20 +36,29 @@ def from_hexa_to_quad(conns):
     right_face = conns[:, [2, 3, 7, 6]]
     left_face = conns[:, [1, 0, 4, 5]]
 
-    return 'quad', np.r_[bottom_face, top_face, front_face,
-                         back_face, right_face, left_face]
+    new_conns = np.r_[bottom_face, top_face, front_face,
+                      back_face, right_face, left_face]
+
+    if not keep_repeated:
+        new_conns = remove_repeated_conns(new_conns)
+
+    return 'quad', new_conns
 
 
-def from_quad_to_line(conns):
+def from_quad_to_line(conns, keep_repeated=True):
     """
     Example:
         [0, 1, 2, 3] -> [0, 1], [1, 2], [2, 3], [3, 0]
     """
-    # TODO: avoid repetitions (flag).
     line_conns = [conns[:, [i, i + 1]] for i in range(3)]
     line_conns.append(conns[:, [-1, 0]])
 
-    return 'line', np.r_[line_conns].reshape(-1, 2)
+    new_conns = np.r_[line_conns].reshape(-1, 2)
+
+    if not keep_repeated:
+        new_conns = remove_repeated_conns(new_conns)
+
+    return 'line', new_conns
 
 
 def from_tetra_to_tri(conns):
@@ -45,45 +66,31 @@ def from_tetra_to_tri(conns):
     pass
 
 
-def get_bnds():
-    # TODO: more general code that works both in 2d and 3d
-    pass
-
-
-def get_bnd_faces_from_faces(faces):
-    """Get boundary faces (i.e. faces that belong only to one element).
-
-    Notes:
-        Only applicable in 3d.
-    """
-    bnd_faces = []
-    for face_cmp in faces:
-        face_cmp_set = set(face_cmp.tolist())
-
-        k = 0
-        for face in faces:
-            # TODO: is this line scalable?
-            if all([elem in face_cmp_set for elem in face]):
-                k += 1
-                if k > 1:
-                    break
-        else:
-            bnd_faces.append(face_cmp)
-
-    return np.array(bnd_faces)
-
-
-def remove_repeated_conns():
+def remove_repeated_conns(conns):
     """Removes repeated connectivities.
 
     Notes:
         Order of nodes in the connectivity does not matter.
     """
-    pass
+    new_conns = []
+    for conn in conns:
+        if not is_repeated_conn(new_conns, conn):
+            new_conns.append(conn)
+
+    return np.array(new_conns)
 
 
-def is_repeated_conn(conn):
-    pass
+def is_repeated_conn(conns, conn, threshold=1):
+    conn_cmp_set = set(conn.tolist())
+    k = 0
+    for conn in conns:
+        # ???: is this line scalable? (alternative: reorder conns and set)
+        if all([elem in conn_cmp_set for elem in conn]):
+            k += 1
+            if k > threshold:
+                return True
+
+    return False
 
 
 def get_local_points_and_cells(points, cells):
