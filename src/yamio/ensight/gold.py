@@ -3,13 +3,9 @@
 Notes:
     Still a very naive implementation of a writer and a reader.
 
-    Supports:
-        * Unique part reading/writing.
-
     Validated elements:
         * tri
         * quad
-
 
 
 References:
@@ -42,27 +38,6 @@ geo_to_meshio_type = {item: key for key, item in meshio_to_geo_type.items()}
 
 # TODO: add test to verify if passed mesh is not modified
 
-# TODO: extend to multiple parts (test with trappedvtx) -> update docstrings then
-
-def get_part_regex():
-    """Gets part regex.
-
-    Starts at part beginning line and stops at the end of coordinates. Retrieves
-    the following groups:
-        * part description
-        * coords
-        * element type
-        * connectivities
-    """
-    part_info = r'[ ]*part[ ]*\n[ ]*[0-9]+[ ]*\n[ ]*(\w+)[ ]*\n(?:.+\n){2}'
-    coords = r'([^a-df-zA-DF-Z]+)+'
-    cells_info = r'[ ]*(\w+)[ ]*\n[ ]*\d+[ ]*\n'
-    cells = r'((?:[0-9 ]{3,}\n*)+)'
-    return part_info + coords + cells_info + cells
-
-
-# TODO: extend reader to mixed elements
-
 
 class GeoReader:
 
@@ -77,26 +52,30 @@ class GeoReader:
         parts_text = [part_text for part_text in re.findall(get_part_regex(), text)]
         parts = {}
         for part_text in parts_text:
-            name, coords_text, elem_type, cells_text = part_text
-            parts[name] = self._get_part(coords_text, elem_type, cells_text)
+            name, coords_text, cells_text = part_text
+            parts[name] = self._get_part(coords_text, cells_text)
 
         if len(parts) == 1:
             return parts[list(parts.keys())[0]]
         else:
             return parts
 
-    def _get_part(self, coords_text, elem_type, cells_text):
+    def _get_part(self, coords_text, cells_text):
         points = self._get_part_coords(coords_text)
-        cells = self._get_part_cells(elem_type, cells_text)
+        cells = self._get_part_cells(cells_text)
         return Mesh(points, cells)
 
     def _get_part_coords(self, coords_text):
         return np.array(coords_text.split('\n')[:-1], dtype=float).reshape(3, -1).T
 
-    def _get_part_cells(self, elem_type, cells_text):
-        # TODO: extend to hybrid
-        conns = np.array([elem.split() for elem in cells_text.split()], dtype=int)
-        cells = [CellBlock(geo_to_meshio_type[elem_type], conns - 1)]
+    def _get_part_cells(self, cells_text):
+        cells_info, conns = get_conns_regex(with_groups=True)
+        regex = re.compile(cells_info + conns)
+
+        cells = []
+        for (elem_type, conns_text) in regex.findall(cells_text):
+            conns = np.array([elem.split() for elem in conns_text.split()], dtype=int)
+            cells.append(CellBlock(geo_to_meshio_type[elem_type], conns - 1))
 
         return cells
 
@@ -168,3 +147,44 @@ class GeoWriter:
 
     def _process_text(self, text):
         return [str(elem) if type(elem) is not list else ' '.join([str(e) for e in elem]) for elem in text]
+
+
+def get_conns_regex(with_groups=False):
+    """
+    Notes:
+        Function was created to have groups and no-groups regex near, to
+        remember to change both simultaneously.
+
+        Need to groups and no-groups are mixed meshes.
+
+        When returning groups, the following groups are returned:
+            * elemement type
+            * connectivities
+    """
+    if with_groups:
+        cells_info = r'[ ]*(\w+)[ ]*\n[ ]*\d+[ ]*\n'
+        conns = r'((?:[0-9 ]{3,}\n*)+)'
+    else:
+        cells_info = r'[ ]*\w+[ ]*\n[ ]*\d+[ ]*\n'
+        conns = r'(?:[0-9 ]{3,}\n*)+'
+
+    return cells_info, conns
+
+
+def get_part_regex():
+    """Gets part regex.
+
+    Starts at part beginning line and stops at the end of coordinates. Retrieves
+    the following groups:
+        * part description
+        * coords
+        * cells info (all the text from element type to the end of
+        connectivities of last element type)
+    """
+    part_info = r'[ ]*part[ ]*\n[ ]*[0-9]+[ ]*\n[ ]*(\w+)[ ]*\n(?:.+\n){2}'
+    coords = r'([^a-df-zA-DF-Z]+)+'
+
+    cells_info, conns = get_conns_regex(with_groups=False)
+    cells_full = rf'((?:{cells_info}{conns})+)'
+
+    return part_info + coords + cells_full
