@@ -3,6 +3,8 @@
 Notes:
     Still a very naive implementation of a writer and a reader.
 
+    Supports multiple parts and hybrid meshes.
+
     Validated elements:
         * tri
         * quad
@@ -74,7 +76,7 @@ class GeoReader:
 
         cells = []
         for (elem_type, conns_text) in regex.findall(cells_text):
-            conns = np.array([elem.split() for elem in conns_text.split()], dtype=int)
+            conns = np.array([elem.split() for elem in conns_text.rstrip().split('\n')], dtype=int)
             cells.append(CellBlock(geo_to_meshio_type[elem_type], conns - 1))
 
         return cells
@@ -86,8 +88,14 @@ class GeoWriter:
               element_id='off', part_description=''):
         '''
         Args:
+            mesh (meshio.Mesh or dict of meshio.Mesh): Mesh or part meshes.
+                Part description is the key.
             description (array-like, shape=[2]): two initial lines of the file.
+            part_description (str): Part description. Ignored if mesh is a `dict`.
         '''
+        if type(mesh) is not dict:
+            mesh = {part_description: mesh}
+
         # TODO: add extents
         if description is None:
             description = self._get_default_description()
@@ -97,19 +105,17 @@ class GeoWriter:
         text.append(f'node id {node_id}')
         text.append(f'node_id {element_id}')
 
-        # part
-        text.extend(self._add_part(1, part_description, mesh.points, mesh.cells))
+        # write parts
+        for i, (part_description, part_mesh) in enumerate(mesh.items()):
+            text.extend(self._add_part(i + 1, part_description, part_mesh.points,
+                                       part_mesh.cells))
 
         # write file
         with open(filename, 'w') as file:
             file.write('\n'.join(self._process_text(text)))
 
-    def write_multiple_parts(self):
-        # TODO: think about name
-        pass
-
     def _get_default_description(self):
-        return ['`yamio` generated file', '']
+        return ['yamio generated file', '']
 
     def _add_part(self, number, description, coords, cells):
         '''
