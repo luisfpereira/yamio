@@ -107,7 +107,7 @@ class HipWriter:
             if len(mesh.bnd_patches) == 0:
                 h5_file.create_group('Boundary')
             else:
-                self._write_bnd_to_h5(h5_file, mesh.bnd_patches)
+                self._write_bnd_patches(h5_file, mesh.bnd_patches)
 
         # use pyhip to complete the file
         read_hdf5_mesh(tmp_filename)
@@ -134,21 +134,23 @@ class HipWriter:
             h5_file.create_dataset(f'/Coordinates/{AXIS_MAP[axis]}',
                                    data=points[:, axis])
 
-    def _write_bnd_to_h5(self, h5_file, bnd_patches):
+    def _write_bnd_patches(self, h5_file, bnd_patches):
         """
         Notes:
             Only writes to Boundary and let's hip take care of everything else.
         """
 
         # collect info
-        patch_labels = [np.string_(name) for name in bnd_patches.keys()]
+        patch_labels = [name for name in bnd_patches.keys()]
+        # patch_labels = np.array(list(bnd_patches.keys()), dtype=np.string_)
         bnd_node_groups = [np.unique(patch_nodes.data.ravel()) for patch_nodes in bnd_patches.values()]
         nodes = np.concatenate(bnd_node_groups, axis=0)
         group_dims = np.cumsum([len(node_groups) for node_groups in bnd_node_groups],
                                dtype=int)
 
         # write to h5
-        h5_file.create_dataset('Boundary/PatchLabels', data=patch_labels)
+        h5_file.create_dataset('Boundary/PatchLabels', data=patch_labels,
+                               dtype='S24')
         h5_file.create_dataset('Boundary/bnode->node', data=nodes + 1)
         h5_file.create_dataset('Boundary/bnode_lidx', data=group_dims)
 
