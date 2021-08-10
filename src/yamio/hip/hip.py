@@ -1,126 +1,93 @@
-"""Reads and writes Cerfacs' XDMF files by wrapping meshio.
-
-Notes:
-    For now it ignores:
-        * patches
-        * any data
-        * mixed elements
-
-    Validated elements:
-        * Triangle
-        * Quadrilateral
-        * Tetrahedron
-        * Hexahedron
+"""Reads and writes Cerfacs' XDMF files.
 """
 
 import os
-from xml.etree import ElementTree as ET
 
 import numpy as np
 import h5py
 
 import meshio
 from meshio._common import num_nodes_per_cell
-from meshio.xdmf.main import XdmfReader
-from meshio.xdmf.common import xdmf_to_meshio_type
 
 from pyhip.commands.readers import read_hdf5_mesh
 from pyhip.commands.writers import write_hdf5
 from pyhip.commands.operations import hip_exit
 
-from yamio.hip.xdmf2_utils import create_h5_dataset
 from yamio.mesh_utils import get_local_points_and_cells
 
 
-class HipReader(XdmfReader):
-    # TODO: remove dependency in XDMFReader!
+AXIS_MAP = {0: 'x', 1: 'y', 2: 'z'}
+meshio_to_hip_type = {'line': 'bi',
+                      'triangle': 'tri',
+                      'quad': 'qua',
+                      'tetra': 'tet',
+                      'hexahedron': 'hex',
+                      }
+hip_to_meshio_type = {item: key for key, item in meshio_to_hip_type.items()}
 
-    def __init__(self):
-        pass
-        # self.filename = filename
-        # self.h5_filename = h5_filename
-        # if h5_filename is None:
-        #     self.h5_filename = f"{'.'.join(filename.split('.')[:-1])}.h5"
 
-    def _get_etree(self, filename):
-        return ET.parse(filename, ET.XMLParser())
+class HipReader:
 
-    def _get_topology(self, topology_elem):
+    def read(self, h5_filename):
 
-        topology_type = xdmf_to_meshio_type[topology_elem.get("Type")]
-        n_nodes_cell = num_nodes_per_cell[topology_type]
-
-        data_item = list(list(topology_elem)[0])[0]
-
-        data = self._read_data_item(data_item).reshape(-1, n_nodes_cell)
-
-        return self._get_corrected_cells(data, topology_type)
-
-    def _get_patch_topology(self, grid_elem):
-        """
-        Notes:
-            h5's Patch contains local coordinates. Yet, by reading this
-            information in h5's Boundary, we collect global information.
-        """
-        grid_name = grid_elem.get('Name')
-
-        topology_elem = grid_elem.find('.//Topology')
-
-        topology_type = xdmf_to_meshio_type[topology_elem.get("Type")]
-        n_nodes_cell = num_nodes_per_cell[topology_type]
-
-        data_item_parent = list(list(topology_elem)[0])[0]
-
-        # get indices
-        data_item = list(data_item_parent)[0]
-        init, _, size = [int(num) for num in data_item.text.split()]
-        end = init + size
-
-        # get data
-        data_item = list(data_item_parent)[1]
-        data = self._read_data_item(data_item)[init:end].reshape(-1, n_nodes_cell)
-
-        return grid_name, self._get_corrected_cells(data, topology_type)
-
-    def _get_corrected_cells(self, data, topology_type):
-
-        data = correct_cell_conns_reading.get(topology_type, lambda x: x)(data)
-        data -= 1  # correct initial index
-        cells = [meshio.CellBlock(topology_type, data)]
-
-        return cells
-
-    def _get_geometry(self, geometry_elem):
-        return np.array([self._read_data_item(data_item) for data_item in list(geometry_elem)]).T
-
-    def _get_bnd_patches_from_xdmf(self, tree):
-        grid_elems = tree.findall('.//Grid')
-        patches = [self._get_patch_topology(grid_elem) for grid_elem in grid_elems[1:]]
-
-        return {patch_info[0]: patch_info[1][0] for patch_info in patches}
-
-    def read(self, filename, h5_filename=None):
-        '''
-        Notes:
-            Assumes first grid is the mesh and ignores patches.
-        '''
-        self.filename = filename  # bad code, but forced by inheritance
-        if h5_filename is None:
-            h5_filename = f"{'.'.join(filename.split('.')[:-1])}.h5"
-
-        tree = self._get_etree(filename)
-
-        # assumes first topology is mesh
-        topology_elem = tree.find('.//Topology')
-        cells = self._get_topology(topology_elem)
-
-        geometry_elem = tree.find('.//Geometry')
-        points = self._get_geometry(geometry_elem)
-
-        bnd_patches = self._get_bnd_patches_from_xdmf(tree)
-        # TODO: 2d patches should be read from h5 (and elem_type is line)
+        with h5py.File(h5_filename, 'r') as h5_file:
+            cells = self._get_cells(h5_file)
+            points = self._get_points(h5_file)
+            bnd_patches = self._get_bnd_patches(h5_file)
 
         return HipMesh(points, cells, bnd_patches=bnd_patches)
+
+    def _get_cells(self, h5_file):
+        conns_basename = 'Connectivity'
+        conns_name = list(h5_file[conns_basename].keys())[0]
+
+        elem_type = hip_to_meshio_type[conns_name.split('-')[0]]
+        conns_path = f'{conns_basename}/{conns_name}'
+        conns = self._read_conns(h5_file, conns_path, elem_type)
+
+        return [meshio.CellBlock(elem_type, conns)]
+
+    def _read_conns(self, h5_file, conns_path, elem_type):
+        n_nodes_cell = num_nodes_per_cell[elem_type]
+        conns = h5_file[conns_path][()].reshape(-1, n_nodes_cell)
+        return self._get_corrected_conns(conns, elem_type)
+
+    def _get_points(self, h5_file):
+        coords_basename = 'Coordinates'
+        axes = list(h5_file[coords_basename].keys())
+        return np.array([h5_file[f'{coords_basename}/{axis}'][()] for axis in axes]).T
+
+    def _get_corrected_conns(self, conns, elem_type):
+        conns = correct_cell_conns_reading.get(elem_type, lambda x: x)(conns)
+        conns -= 1  # correct initial index
+
+        return conns
+
+    def _get_bnd_patches(self, h5_file):
+        bnd_basename = 'Boundary'
+
+        # get all conns
+        for name in h5_file[bnd_basename].keys():
+            if name.endswith('->node'):
+                bnd_conns_name = name
+                break
+        hip_elem_type = bnd_conns_name.split('-')[0].split('_')[1]
+        elem_type = hip_to_meshio_type[hip_elem_type]
+        conns_path = f'{bnd_basename}/{bnd_conns_name}'
+        conns = self._read_conns(h5_file, conns_path, elem_type)
+
+        # get patch labels
+        patch_labels = [name.decode('utf-8').strip() for name in h5_file[f'{bnd_basename}/PatchLabels'][()]]
+
+        # organize patches
+        last_indices = h5_file[f'{bnd_basename}/bnd_{hip_elem_type}_lidx'][()]
+        fidx = 0
+        bnd_patches = {}
+        for patch_label, lidx in zip(patch_labels, last_indices):
+            bnd_patches[patch_label] = meshio.CellBlock(elem_type, conns[fidx:lidx])
+            fidx = lidx
+
+        return bnd_patches
 
 
 class HipWriter:
@@ -137,11 +104,9 @@ class HipWriter:
             self._write_coords(h5_file, mesh)
 
             # write boundary data (only in h5 file)
-            # TODO: check if hip is able to read 2d mesh (with explicit patches)
             if len(mesh.bnd_patches) == 0:
                 h5_file.create_group('Boundary')
             else:
-                # TODO: write also xdmf? requires to write for bnd_quad also
                 self._write_bnd_to_h5(h5_file, mesh.bnd_patches)
 
         # use pyhip to complete the file
@@ -159,15 +124,15 @@ class HipWriter:
         conns = correct_cell_conns_writing.get(elem_type, lambda x: x)(conns)
         conns += 1
 
-        h5_path = f'/Connectivity/{elem_type[:3].lower()}->node'
-        create_h5_dataset(h5_file, h5_path, conns.ravel())
+        hip_elem_type = meshio_to_hip_type[elem_type]
+        h5_path = f'/Connectivity/{hip_elem_type}->node'
+        h5_file.create_dataset(h5_path, data=conns.ravel())
 
     def _write_coords(self, h5_file, mesh):
-        axis_map = {0: 'x', 1: 'y', 2: 'z'}
         points = mesh.points
         for axis in range(points.shape[1]):
-            create_h5_dataset(h5_file, f'/Coordinates/{axis_map[axis]}',
-                              points[:, axis])
+            h5_file.create_dataset(f'/Coordinates/{AXIS_MAP[axis]}',
+                                   data=points[:, axis])
 
     def _write_bnd_to_h5(self, h5_file, bnd_patches):
         """
@@ -183,9 +148,9 @@ class HipWriter:
                                dtype=int)
 
         # write to h5
-        create_h5_dataset(h5_file, 'Boundary/PatchLabels', patch_labels)
-        create_h5_dataset(h5_file, 'Boundary/bnode->node', nodes + 1)
-        create_h5_dataset(h5_file, 'Boundary/bnode_lidx', group_dims)
+        h5_file.create_dataset('Boundary/PatchLabels', data=patch_labels)
+        h5_file.create_dataset('Boundary/bnode->node', data=nodes + 1)
+        h5_file.create_dataset('Boundary/bnode_lidx', data=group_dims)
 
 
 def _correct_tetra_conns_reading(cells):
@@ -227,6 +192,7 @@ class HipMesh(meshio.Mesh):
 
 def create_mesh_from_patches(mesh, ravel_cells=True):
     # TODO: review (can be done better now)
+    # TODO: move to a .geo utils? display bnd patches (also bnd rep?). bring kokiy rep file there?
 
     new_points, new_cells = get_local_points_and_cells(mesh.points, mesh.patches)
 
