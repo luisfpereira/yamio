@@ -173,6 +173,8 @@ correct_cell_conns_writing = {'tetra': _correct_tetra_conns_writing}
 
 
 class HipMesh(meshio.Mesh):
+    # TODO: update mesh representation
+
     """
     Notes:
         I haven't found a simple way to use any of `meshio` inputs to handle
@@ -190,19 +192,3 @@ class HipMesh(meshio.Mesh):
                          point_sets=point_sets, cell_sets=cell_sets,
                          gmsh_periodic=gmsh_periodic, info=info)
         self.bnd_patches = bnd_patches
-
-
-def create_mesh_from_patches(mesh, ravel_cells=True):
-    # TODO: review (can be done better now)
-    # TODO: move to a .geo utils? display bnd patches (also bnd rep?). bring kokiy rep file there?
-
-    new_points, new_cells = get_local_points_and_cells(mesh.points, mesh.patches)
-
-    if ravel_cells:
-        # this is required only due to way geo reading is done in tiny-3d-engine
-        # assumes all the cells have same type
-        data = new_cells[0].data
-        for cells in new_cells[1:]:
-            data = np.r_[data, cells.data]
-
-    return meshio.Mesh(new_points, [meshio.CellBlock(new_cells[0].type, data)])
