@@ -13,10 +13,7 @@ Notes:
         * Hexahedron
 """
 
-# TODO: validation should be done with tests!
-# TODO: add test to verify if passed mesh is not modified
-
-
+import os
 from xml.etree import ElementTree as ET
 
 import numpy as np
@@ -26,20 +23,17 @@ import meshio
 from meshio._common import num_nodes_per_cell
 from meshio.xdmf.main import XdmfReader
 from meshio.xdmf.common import xdmf_to_meshio_type
-from meshio.xdmf.common import meshio_to_xdmf_type
 
-from yamio.hip.xdmf2_utils import create_root
-from yamio.hip.xdmf2_utils import create_topology_section
-from yamio.hip.xdmf2_utils import create_geometry_section
+from pyhip.commands.readers import read_hdf5_mesh
+from pyhip.commands.writers import write_hdf5
+from pyhip.commands.operations import hip_exit
+
 from yamio.hip.xdmf2_utils import create_h5_dataset
 from yamio.mesh_utils import get_local_points_and_cells
 
 
-# TODO: deep changes in design (probably no need of a HipMesh -> explore meshio)
-
-
 class HipReader(XdmfReader):
-    # TODO: remove dependency in XDMFReader?
+    # TODO: remove dependency in XDMFReader!
 
     def __init__(self):
         pass
@@ -131,23 +125,16 @@ class HipReader(XdmfReader):
 
 class HipWriter:
 
-    def __init__(self):
-        self.version = '2.0'
-        self.fmt = 'HDF'
-
     def write(self, file_basename, mesh):
-        root = create_root(version=self.version, Format=self.fmt)
-        domain = ET.SubElement(root, "Domain")
-        # TODO: need more parameters here?
-        grid = ET.SubElement(domain, "Grid", Name="Grid")
 
-        with h5py.File(f'{file_basename}.mesh.h5', 'w') as h5_file:
+        tmp_filename = f'{file_basename}_tmp.mesh.h5'
+        with h5py.File(tmp_filename, 'w') as h5_file:
 
-            # write mesh topology
-            self._write_topology(h5_file, mesh, grid)
+            # write mesh topology (conns)
+            self._write_conns(h5_file, mesh)
 
-            # write mesh geometry
-            self._write_geometry(h5_file, mesh, grid)
+            # write mesh coordinates
+            self._write_coords(h5_file, mesh)
 
             # write boundary data (only in h5 file)
             # TODO: check if hip is able to read 2d mesh (with explicit patches)
@@ -157,27 +144,30 @@ class HipWriter:
                 # TODO: write also xdmf? requires to write for bnd_quad also
                 self._write_bnd_to_h5(h5_file, mesh.bnd_patches)
 
-        # dump tree
-        tree = ET.ElementTree(root)
-        ET.indent(tree, space='  ')
-        tree.write(f'{file_basename}.mesh.xmf', xml_declaration=True,
-                   encoding='utf-8')
+        # use pyhip to complete the file
+        read_hdf5_mesh(tmp_filename)
+        write_hdf5(file_basename)
+        hip_exit()
 
-        return tree
+        # delete tmp file
+        os.remove(tmp_filename)
 
-    def _write_topology(self, file, mesh, grid_elem):
+    def _write_conns(self, h5_file, mesh):
         # ignores mixed case
-        topology_type = mesh.cells[0].type
-        data = mesh.cells[0].data.copy()
-        data = correct_cell_conns_writing.get(topology_type, lambda x: x)(data)
-        data += 1
-        return create_topology_section(grid_elem, data, file,
-                                       meshio_to_xdmf_type[topology_type][0],
-                                       Format=self.fmt)
+        elem_type = mesh.cells[0].type
+        conns = mesh.cells[0].data.copy()
+        conns = correct_cell_conns_writing.get(elem_type, lambda x: x)(conns)
+        conns += 1
 
-    def _write_geometry(self, file, mesh, grid_elem):
-        return create_geometry_section(grid_elem, mesh.points, file,
-                                       Format=self.fmt)
+        h5_path = f'/Connectivity/{elem_type[:3].lower()}->node'
+        create_h5_dataset(h5_file, h5_path, conns.ravel())
+
+    def _write_coords(self, h5_file, mesh):
+        axis_map = {0: 'x', 1: 'y', 2: 'z'}
+        points = mesh.points
+        for axis in range(points.shape[1]):
+            create_h5_dataset(h5_file, f'/Coordinates/{axis_map[axis]}',
+                              points[:, axis])
 
     def _write_bnd_to_h5(self, h5_file, bnd_patches):
         """
