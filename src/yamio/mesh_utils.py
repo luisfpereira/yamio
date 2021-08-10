@@ -13,7 +13,8 @@ def get_brep(points, cells):
 
         New connectivity numbers will be used (after removal of non-used points).
     """
-    map_to_elem = {'quad': from_quad_to_line,
+    map_to_elem = {'triangle': from_triangle_to_line,
+                   'quad': from_quad_to_line,
                    'hexahedron': from_hexa_to_quad}
 
     # name face is for simplification (represents edge if 2d)
@@ -51,6 +52,18 @@ def from_quad_to_line(conns, keep_repeated=True):
         [0, 1, 2, 3] -> [0, 1], [1, 2], [2, 3], [3, 0]
     """
     line_conns = [conns[:, [i, i + 1]] for i in range(3)]
+    line_conns.append(conns[:, [-1, 0]])
+
+    new_conns = np.r_[line_conns].reshape(-1, 2)
+
+    if not keep_repeated:
+        new_conns = remove_repeated_conns(new_conns)
+
+    return 'line', new_conns
+
+
+def from_triangle_to_line(conns, keep_repeated=True):
+    line_conns = [conns[:, [i, i + 1]] for i in range(2)]
     line_conns.append(conns[:, [-1, 0]])
 
     new_conns = np.r_[line_conns].reshape(-1, 2)
