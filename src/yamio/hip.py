@@ -13,6 +13,7 @@ from pyhip.commands.readers import read_hdf5_mesh
 from pyhip.commands.writers import write_hdf5
 from pyhip.commands.operations import hip_exit
 from pyhip.commands.mesh_idcard import extract_hdf_meshinfo
+from pyhip.hipster import pyhip_cmd
 
 
 AXIS_MAP = {0: 'x', 1: 'y', 2: 'z'}
@@ -91,7 +92,12 @@ class HipReader:
 
 class HipWriter:
 
-    def write(self, file_basename, mesh):
+    def write(self, file_basename, mesh, commands=()):
+        """
+        Args:
+            commands (array-like): Additional operations to be performed
+                between reading and writing within `hip`.
+        """
 
         tmp_filename = f'{file_basename}_tmp.mesh.h5'
         with h5py.File(tmp_filename, 'w') as h5_file:
@@ -110,6 +116,8 @@ class HipWriter:
 
         # use pyhip to complete the file
         read_hdf5_mesh(tmp_filename)
+        for command in commands:
+            pyhip_cmd(command)
         write_hdf5(file_basename)
         hip_exit()
 
