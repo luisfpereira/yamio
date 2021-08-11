@@ -102,14 +102,10 @@ class HipWriter:
             self._write_coords(h5_file, mesh)
 
             # write boundary data (only in h5 file)
-            if mesh.bnd_patches is None and mesh.bnd_patches is None:
+            if mesh.bnd_patches is None:
                 h5_file.create_group('Boundary')
             else:
-                if mesh.bnd_patches is not None:
-                    self._write_bnd_patches(h5_file, mesh.bnd_patches)
-
-                if mesh.inc_bnd_patches is not None:
-                    self._write_bnd_patches(h5_file, mesh.inc_bnd_patches)
+                self._write_bnd_patches(h5_file, mesh.bnd_patches)
 
         # use pyhip to complete the file
         read_hdf5_mesh(tmp_filename)
@@ -144,12 +140,12 @@ class HipWriter:
 
         # collect info
         patch_labels = list(bnd_patches.keys())
-        has_cell_blocks = isinstance(bnd_patches[patch_labels[0]], meshio.CellBlock)
-
-        if has_cell_blocks:
-            bnd_node_groups = [np.unique(patch_nodes.data.ravel()) for patch_nodes in bnd_patches.values()]
-        else:
-            bnd_node_groups = [node_group for node_group in bnd_patches.values()]
+        bnd_node_groups = []
+        for patch_nodes in bnd_patches.values():
+            if isinstance(patch_nodes, meshio.CellBlock):
+                bnd_node_groups.append(np.unique(patch_nodes.data.ravel()))
+            else:
+                bnd_node_groups.append(patch_nodes)
 
         nodes = np.concatenate(bnd_node_groups, axis=0)
         group_dims = np.cumsum([len(node_groups) for node_groups in bnd_node_groups],
@@ -186,22 +182,20 @@ class HipMesh(meshio.Mesh):
 
     Args:
         bnd_patches (dict) : Boundary patches.
-            Follow cells format, but are a dict instead of list.
-        inc_bnd_patches (dict) : Incomplete boundary patches.
-            Contain only the nodes that are part of the patch, not the conns.
+            Follow cells format, but are a dict instead of list. May also
+            contain a `np.array` with nodes, instead of `meshio.CellBlock`.
 
     Notes:
         I haven't found a simple way to use any of `meshio` inputs to handle
         boundary and patch data (that's the reason for this object).
     """
 
-    def __init__(self, points, cells, bnd_patches=None, inc_bnd_patches=None,
-                 point_data=None, cell_data=None, field_data=None,
-                 point_sets=None, cell_sets=None, gmsh_periodic=None, info=None):
+    def __init__(self, points, cells, bnd_patches=None, point_data=None,
+                 cell_data=None, field_data=None, point_sets=None,
+                 cell_sets=None, gmsh_periodic=None, info=None):
 
         super().__init__(points, cells, point_data=point_data,
                          cell_data=cell_data, field_data=field_data,
                          point_sets=point_sets, cell_sets=cell_sets,
                          gmsh_periodic=gmsh_periodic, info=info)
         self.bnd_patches = bnd_patches
-        self.inc_bnd_patches = inc_bnd_patches
