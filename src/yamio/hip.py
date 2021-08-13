@@ -2,6 +2,7 @@
 """
 
 import os
+import warnings
 
 import numpy as np
 import h5py
@@ -97,7 +98,12 @@ class HipWriter:
         Args:
             commands (array-like): Additional operations to be performed
                 between reading and writing within `hip`.
+
+        Notes:
+            If patches do not exist, then the file can still be written, but
+            several Hip features will not be available.
         """
+        pre_read_commands = []
 
         tmp_filename = f'{file_basename}_tmp.mesh.h5'
         with h5py.File(tmp_filename, 'w') as h5_file:
@@ -109,12 +115,15 @@ class HipWriter:
             self._write_coords(h5_file, mesh)
 
             # write boundary data (only in h5 file)
-            if mesh.bnd_patches is None:
+            if not hasattr(mesh, 'bnd_patches') or mesh.bnd_patches is None:
                 h5_file.create_group('Boundary')
+                pre_read_commands.append('set check 0')
             else:
                 self._write_bnd_patches(h5_file, mesh.bnd_patches)
 
         # use pyhip to complete the file
+        for command in pre_read_commands:
+            pyhip_cmd(command)
         read_hdf5_mesh(tmp_filename)
         for command in commands:
             pyhip_cmd(command)
@@ -125,10 +134,14 @@ class HipWriter:
         os.remove(tmp_filename)
 
         # validate mesh (volume)
-        mesh_filename = f'{file_basename}.mesh.h5'
-        mesh_info, *_ = extract_hdf_meshinfo(mesh_filename)
-        if mesh_info['Metric']['Element volume [m3]'].min < 0:
-            raise Exception('Invalid grid: elements with negative volume')
+        # TODO: remove when new version of hip is available
+        try:
+            mesh_filename = f'{file_basename}.mesh.h5'
+            mesh_info, *_ = extract_hdf_meshinfo(mesh_filename)
+            if mesh_info['Metric']['Element volume [m3]'].min < 0:
+                raise Exception('Invalid grid: elements with negative volume')
+        except KeyError:
+            warnings.warn("Mesh validation was not performed.")
 
     def _write_conns(self, h5_file, mesh):
         # ignores mixed case
