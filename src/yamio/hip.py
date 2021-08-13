@@ -119,7 +119,7 @@ class HipWriter:
             self._write_coords(h5_file, mesh)
 
             # write boundary data (only in h5 file)
-            if not hasattr(mesh, 'bnd_patches') or mesh.bnd_patches is None:
+            if not hasattr(mesh, 'bnd_patches') or not mesh.bnd_patches:
                 h5_file.create_group('Boundary')
                 pre_read_commands.append('set check 0')
             else:
@@ -208,8 +208,6 @@ correct_cell_conns_writing = {'tetra': _correct_tetra_conns_writing}
 
 
 class HipMesh(meshio.Mesh):
-    # TODO: update mesh representation
-
     """See base class.
 
     Args:
@@ -230,7 +228,7 @@ class HipMesh(meshio.Mesh):
                          cell_data=cell_data, field_data=field_data,
                          point_sets=point_sets, cell_sets=cell_sets,
                          gmsh_periodic=gmsh_periodic, info=info)
-        self.bnd_patches = bnd_patches
+        self.bnd_patches = bnd_patches if bnd_patches is not None else {}
 
     def __repr__(self):
         lines = []
@@ -246,3 +244,39 @@ class HipMesh(meshio.Mesh):
                     lines.append(f"    {patch_name}: {size}")
 
         return repr_str + "\n".join(lines)
+
+    def __eq__(self, other):
+        # only points, cells and bnd_patches are verified
+
+        # verify points
+        if not np.allclose(self.points, other.points):
+            return False
+
+        # verify cells (assumes same order of cells blocks)
+        for cells, other_cells in zip(self.cells, other.cells):
+            if cells.type != other_cells.type:
+                return False
+
+            if not np.array_equal(cells.data, other_cells.data):
+                return False
+
+        # verify bnd_patches
+        self_keys = set(self.bnd_patches.keys())
+        other_keys = set(other.bnd_patches.keys())
+        if self_keys != other_keys:
+            return False
+
+        for key in self_keys:
+            self_patch = self.bnd_patches[key]
+            other_patch = other.bnd_patches[key]
+            if type(self_patch) != type(other_patch):
+                return False
+
+            if isinstance(self_patch, meshio.CellBlock):
+                if not np.array_equal(self_patch.data, other_patch.data):
+                    return False
+            else:
+                if not np.array_equal(self_patch, other_patch):
+                    return False
+
+        return True
