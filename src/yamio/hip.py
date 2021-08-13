@@ -16,6 +16,8 @@ from pyhip.commands.operations import hip_exit
 from pyhip.commands.mesh_idcard import extract_hdf_meshinfo
 from pyhip.hipster import pyhip_cmd
 
+import yamio
+
 
 AXIS_MAP = {0: 'x', 1: 'y', 2: 'z'}
 meshio_to_hip_type = {'line': 'bi',
@@ -36,7 +38,7 @@ class HipReader:
             points = self._get_points(h5_file)
             bnd_patches = self._get_bnd_patches(h5_file)
 
-        return HipMesh(points, cells, bnd_patches=bnd_patches)
+        return yamio.Mesh(points, cells, bnd_patches=bnd_patches)
 
     def _get_cells(self, h5_file):
         conns_basename = 'Connectivity'
@@ -205,78 +207,3 @@ def _correct_tetra_conns_writing(cells):
 # uses meshio names
 correct_cell_conns_reading = {'tetra': _correct_tetra_conns_reading}
 correct_cell_conns_writing = {'tetra': _correct_tetra_conns_writing}
-
-
-class HipMesh(meshio.Mesh):
-    """See base class.
-
-    Args:
-        bnd_patches (dict) : Boundary patches.
-            Follow cells format, but are a dict instead of list. May also
-            contain a `np.array` with nodes, instead of `meshio.CellBlock`.
-
-    Notes:
-        I haven't found a simple way to use any of `meshio` inputs to handle
-        boundary and patch data (that's the reason for this object).
-    """
-
-    def __init__(self, points, cells, bnd_patches=None, point_data=None,
-                 cell_data=None, field_data=None, point_sets=None,
-                 cell_sets=None, gmsh_periodic=None, info=None):
-
-        super().__init__(points, cells, point_data=point_data,
-                         cell_data=cell_data, field_data=field_data,
-                         point_sets=point_sets, cell_sets=cell_sets,
-                         gmsh_periodic=gmsh_periodic, info=info)
-        self.bnd_patches = bnd_patches if bnd_patches is not None else {}
-
-    def __repr__(self):
-        lines = []
-        repr_str = super().__repr__()
-
-        if self.bnd_patches:
-            lines.append("\n  Boundary patches:")
-            for patch_name, patch_nodes in self.bnd_patches.items():
-                size = len(patch_nodes)
-                if isinstance(patch_nodes, meshio.CellBlock):
-                    lines.append(f"    {patch_name} ({patch_nodes.type}): {size}")
-                else:
-                    lines.append(f"    {patch_name}: {size}")
-
-        return repr_str + "\n".join(lines)
-
-    def __eq__(self, other):
-        # only points, cells and bnd_patches are verified
-
-        # verify points
-        if not np.allclose(self.points, other.points):
-            return False
-
-        # verify cells (assumes same order of cells blocks)
-        for cells, other_cells in zip(self.cells, other.cells):
-            if cells.type != other_cells.type:
-                return False
-
-            if not np.array_equal(cells.data, other_cells.data):
-                return False
-
-        # verify bnd_patches
-        self_keys = set(self.bnd_patches.keys())
-        other_keys = set(other.bnd_patches.keys())
-        if self_keys != other_keys:
-            return False
-
-        for key in self_keys:
-            self_patch = self.bnd_patches[key]
-            other_patch = other.bnd_patches[key]
-            if type(self_patch) != type(other_patch):
-                return False
-
-            if isinstance(self_patch, meshio.CellBlock):
-                if not np.array_equal(self_patch.data, other_patch.data):
-                    return False
-            else:
-                if not np.array_equal(self_patch, other_patch):
-                    return False
-
-        return True

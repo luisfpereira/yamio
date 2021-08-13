@@ -13,6 +13,7 @@ def get_brep(points, cells):
 
         New connectivity numbers will be used (after removal of non-used points).
     """
+    # TODO: make it scalable
     map_to_elem = {'triangle': from_triangle_to_line,
                    'quad': from_quad_to_line,
                    'hexahedron': from_hexa_to_quad}
