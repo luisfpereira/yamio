@@ -31,10 +31,10 @@ To write a mesh
 ```python
 import yamio
 
-mesh = yamio.write(filename, mesh)
+mesh = yamio.write(filename, mesh)  # extension inferred
 ```
 
 
 Additionally to `meshio`, the following formats are available: `.mesh.xmf` (`pyhip` main format) and `.geo`.
 
-Note: after you have a `.mesh.xmf` mesh, you can rely on `pyhip` to make additional mesh conversions.
+Note: after you have a `.mesh.xmf` mesh, you can rely on `pyhip` to do additional mesh conversions.
