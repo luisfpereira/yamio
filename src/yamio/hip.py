@@ -96,7 +96,7 @@ class HipReader:
 
 class HipWriter:
 
-    def write(self, file_basename, mesh, commands=()):
+    def write(self, filename, mesh, commands=()):
         """
         Args:
             commands (array-like): Additional operations to be performed
@@ -107,6 +107,7 @@ class HipWriter:
             several Hip features will not be available.
         """
         pre_read_commands = []
+        file_basename = filename.split('.')[0]
 
         tmp_filename = f'{file_basename}_tmp.mesh.h5'
         with h5py.File(tmp_filename, 'w') as h5_file:
