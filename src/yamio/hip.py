@@ -231,3 +231,18 @@ class HipMesh(meshio.Mesh):
                          point_sets=point_sets, cell_sets=cell_sets,
                          gmsh_periodic=gmsh_periodic, info=info)
         self.bnd_patches = bnd_patches
+
+    def __repr__(self):
+        lines = []
+        repr_str = super().__repr__()
+
+        if self.bnd_patches:
+            lines.append("\n  Boundary patches:")
+            for patch_name, patch_nodes in self.bnd_patches.items():
+                size = len(patch_nodes)
+                if isinstance(patch_nodes, meshio.CellBlock):
+                    lines.append(f"    {patch_name} ({patch_nodes.type}): {size}")
+                else:
+                    lines.append(f"    {patch_name}: {size}")
+
+        return repr_str + "\n".join(lines)
