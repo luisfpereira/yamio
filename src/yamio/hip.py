@@ -72,6 +72,9 @@ class HipReader:
             if name.endswith('->node'):
                 bnd_conns_name = name
                 break
+        else:
+            return None
+
         hip_elem_type = bnd_conns_name.split('-')[0].split('_')[1]
         elem_type = hip_to_meshio_type[hip_elem_type]
         conns_path = f'{bnd_basename}/{bnd_conns_name}'
