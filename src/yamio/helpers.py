@@ -13,7 +13,8 @@ from yamio.ensight.gold import GeoWriter
 
 extension_to_filetype.update({
     '.geo': 'geo',
-    '.mesh.h5': 'hip'
+    '.mesh.h5': 'hip',
+    '.mesh.xmf': 'hip'
 })
 
 reader_map.update({

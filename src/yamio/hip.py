@@ -31,7 +31,8 @@ hip_to_meshio_type = {item: key for key, item in meshio_to_hip_type.items()}
 
 class HipReader:
 
-    def read(self, h5_filename):
+    def read(self, filename):
+        h5_filename = '.'.join(filename.split('.')[:-1]) + '.h5'
 
         with h5py.File(h5_filename, 'r') as h5_file:
             cells = self._get_cells(h5_file)
