@@ -53,7 +53,8 @@ class HipReader:
 
     def _read_conns(self, h5_file, conns_path, elem_type):
         n_nodes_cell = num_nodes_per_cell[elem_type]
-        conns = h5_file[conns_path][()].reshape(-1, n_nodes_cell)
+        conns = np.array(h5_file[conns_path][()].reshape(-1, n_nodes_cell),
+                         dtype=int)
         return self._get_corrected_conns(conns, elem_type)
 
     def _get_points(self, h5_file):
