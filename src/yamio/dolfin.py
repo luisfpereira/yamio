@@ -145,7 +145,7 @@ class DolfinSolReader:
         grid = tree.find('.//Grid')
         grid_name = grid.get('Name')
 
-        return grid_name == 'TimeSeries'
+        return 'TimeSeries' in grid_name
 
     def _shares_mesh(self, node):
         return node.find('.//{http://www.w3.org/2001/XInclude}include') is not None
