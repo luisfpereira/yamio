@@ -9,6 +9,7 @@ from yamio.hip import HipReader
 from yamio.hip import HipWriter
 from yamio.ensight.gold import GeoReader
 from yamio.ensight.gold import GeoWriter
+from yamio.dolfin import write as write_dolfin
 
 
 extension_to_filetype.update({
@@ -25,6 +26,7 @@ reader_map.update({
 _writer_map.update({
     'geo': GeoWriter().write,
     'hip': HipWriter().write,
+    'dolfin-yamio': write_dolfin,
 })
 
 
