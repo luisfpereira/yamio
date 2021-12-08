@@ -1,6 +1,7 @@
 
 import numpy as np
 import meshio
+import h5py
 
 
 def write(filename, mesh):
@@ -10,13 +11,21 @@ def write(filename, mesh):
         Still experimental. It will be extended to create an unique h5 file.
     """
 
-    mesh.write(filename)  # replicateds normal behavior
+    mesh.write(filename, file_format='xdmf')  # replicateds normal behavior
 
     if hasattr(mesh, 'bnd_patches') and mesh.bnd_patches:
         base_filename = '.'.join(filename.split('.')[:-1])
         bnd_filename = f'{base_filename}_bnd.xdmf'
         bnd_mesh = get_bnd_mesh(mesh)
-        bnd_mesh.write(bnd_filename)
+        bnd_mesh.write(bnd_filename, file_format='xdmf')
+
+        # write patch labels
+        patch_labels = list(mesh.bnd_patches.keys())
+        h5_filename = f'{base_filename}_bnd.h5'
+        with h5py.File(h5_filename, 'r+') as h5_file:
+
+            h5_file.create_dataset('PatchLabels', data=patch_labels,
+                                   dtype='S24')
 
 
 def get_bnd_mesh(mesh):
