@@ -1,6 +1,9 @@
-__version__ = '0.1.1'
+
+__version__ = '0.2.0'
 
 
 from yamio.mesh import Mesh
-from yamio.helpers import read
-from yamio.helpers import write
+from yamio._helpers import (
+    read,
+    write,
+)
