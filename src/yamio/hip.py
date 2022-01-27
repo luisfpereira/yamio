@@ -2,7 +2,6 @@
 """
 
 import os
-import warnings
 
 import numpy as np
 import h5py
@@ -13,10 +12,12 @@ from meshio._common import num_nodes_per_cell
 from pyhip.commands.readers import read_hdf5_mesh
 from pyhip.commands.writers import write_hdf5
 from pyhip.commands.operations import hip_exit
-from pyhip.commands.mesh_idcard import extract_hdf_meshinfo
 from pyhip.hipster import pyhip_cmd
 
 import yamio
+
+
+# TODO: extend to mixed case
 
 
 AXIS_MAP = {0: 'x', 1: 'y', 2: 'z'}
@@ -140,16 +141,6 @@ class HipWriter:
 
         # delete tmp file
         os.remove(tmp_filename)
-
-        # validate mesh (volume)
-        # TODO: remove when new version of hip is available
-        try:
-            mesh_filename = f'{file_basename}.mesh.h5'
-            mesh_info, *_ = extract_hdf_meshinfo(mesh_filename)
-            if mesh_info['Metric']['Element volume [m3]'].min < 0:
-                raise Exception('Invalid grid: elements with negative volume')
-        except KeyError:
-            warnings.warn("Mesh validation was not performed.")
 
     def _write_conns(self, h5_file, mesh):
         # ignores mixed case
