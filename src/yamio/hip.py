@@ -18,6 +18,7 @@ import yamio
 
 
 # TODO: extend to mixed case
+# TODO: check if mixed
 
 
 AXIS_MAP = {0: 'x', 1: 'y', 2: 'z'}

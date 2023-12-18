@@ -1,8 +1,12 @@
+
 from collections.abc import Iterable
 import copy
 
 import numpy as np
 from pyvista.utilities.fileio import from_meshio
+
+
+# TODO: visualize patches
 
 
 def get_pv_mesh(meshio_mesh):
@@ -13,6 +17,8 @@ def get_pv_mesh(meshio_mesh):
         raise, then another solution must be found.
     """
     pv_mesh = from_meshio(meshio_mesh)
+
+    # TODO: check need for manipulate point and cell data
 
     # point data
     for var_name, value in meshio_mesh.point_sets.items():

@@ -52,6 +52,7 @@ class Mesh(meshio.Mesh):
                 return False
 
         # verify bnd_patches
+        # TODO: improve
         self_keys = set(self.bnd_patches.keys())
         other_keys = set(other.bnd_patches.keys())
         if self_keys != other_keys:

@@ -27,6 +27,9 @@ except ImportError:
     has_h5py = False
 
 
+# TODO: writer for hip is not following the right flow...
+
+
 register_format('geo', ['.geo'], GeoReader().read, {'geo': GeoWriter().write})
 
 
@@ -55,3 +58,5 @@ def read(filename, file_format=None):
             file_format = file_formats[0]
 
     return meshio.read(filename, file_format=file_format)
+
+

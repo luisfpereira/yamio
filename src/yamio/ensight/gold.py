@@ -86,13 +86,13 @@ class GeoWriter:
 
     def write(self, filename, mesh, description=None, node_id='off',
               element_id='off', part_description=''):
-        '''
+        """
         Args:
             mesh (meshio.Mesh or dict of meshio.Mesh): Mesh or part meshes.
                 Part description is the key.
             description (array-like, shape=[2]): two initial lines of the file.
             part_description (str): Part description. Ignored if mesh is a `dict`.
-        '''
+        """
         if type(mesh) is not dict:
             mesh = {part_description: mesh}
 

@@ -2,7 +2,13 @@ import numpy as np
 
 import meshio
 
+
+# TODO: review
+
 # TODO: from cell to cell_block (for readability)
+# TODO: utils to compute cell info?
+
+# TODO: is_mixed error
 
 
 def get_brep(points, cells):
@@ -114,6 +120,8 @@ def get_local_points_and_cells(points, cells):
         Used to build a mesh with a subset of initial cells.
     """
 
+    # TODO: merge same cell types
+
     all_req_dofs = []
     for cell in cells:
         all_req_dofs.extend(cell.data.ravel().tolist())
@@ -121,7 +129,8 @@ def get_local_points_and_cells(points, cells):
 
     dof_map = {dof: new_dof for new_dof, dof in enumerate(all_req_dofs)}
 
-    new_cells = []
+    # gather data
+    new_cells_data = {}
     for cell in cells:
         shape = cell.data.shape
         data = np.empty_like(cell.data)
@@ -129,7 +138,13 @@ def get_local_points_and_cells(points, cells):
             for j in range(shape[1]):
                 data[i, j] = dof_map[cell.data[i, j]]
 
-        new_cells.append(meshio.CellBlock(cell.type, data))
+        if cell.type in new_cells_data:
+            new_cells_data[cell.type] = np.r_[new_cells_data[cell.type], data]
+        else:
+            new_cells_data[cell.type] = data
+
+    # create cells
+    new_cells = [meshio.CellBlock(elem_type, data) for elem_type, data in new_cells_data.items()]
 
     new_points = points[list(all_req_dofs), :]
 
